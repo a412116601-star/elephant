@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>私人电影书架</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#111;color:#eee;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}
+header{padding:28px 20px 18px;position:sticky;top:0;background:linear-gradient(#111 75%,transparent);z-index:5}
+.wrap{max-width:1100px;margin:auto}.brand{font-size:28px;font-weight:800;letter-spacing:1px}.sub{color:#aaa;margin-top:5px}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.stat{background:#1b1b1b;border:1px solid #2b2b2b;border-radius:14px;padding:12px 16px;min-width:125px}.stat b{display:block;font-size:22px}.stat span{color:#999;font-size:12px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}.controls input,.controls select,.controls button{background:#1b1b1b;color:#eee;border:1px solid #333;border-radius:10px;padding:11px 13px}.controls input{flex:1;min-width:190px}.controls button{cursor:pointer}.controls button.active{background:#eee;color:#111}
+.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:18px}
+.card{background:#191919;border:1px solid #292929;border-radius:14px;overflow:hidden;cursor:pointer;transition:.2s}.card:hover{transform:translateY(-4px);border-color:#555}
+.poster{aspect-ratio:2/3;background:linear-gradient(135deg,#292929,#111);display:flex;align-items:center;justify-content:center;text-align:center;padding:14px;font-weight:800;font-size:20px}
+.info{padding:12px}.title{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meta{color:#999;font-size:12px;margin-top:5px}.rating{margin-top:8px;color:#f0c674}.heart{float:right}
+.empty{text-align:center;padding:70px 20px;color:#888;border:1px dashed #333;border-radius:15px}
+dialog{width:min(92vw,500px);border:1px solid #444;border-radius:18px;background:#181818;color:#eee;padding:0}.modal{padding:24px}.modal h2{margin-top:0}.close{float:right;background:none;border:0;color:#aaa;font-size:22px;cursor:pointer}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.modal label{display:block;color:#aaa;font-size:12px;margin:12px 0 5px}.modal input,.modal select,.modal textarea{width:100%;padding:11px;border-radius:9px;border:1px solid #333;background:#111;color:#eee}.modal textarea{min-height:90px;resize:vertical}.actions{display:flex;gap:10px;margin-top:18px}.primary{background:#eee!important;color:#111!important;border:0!important}
+@media(max-width:520px){.shelf{grid-template-columns:repeat(2,1fr)}.row{grid-template-columns:1fr}.brand{font-size:24px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<div class="brand">🎬 私人电影书架</div><div class="sub">把看过的电影，收藏成属于自己的电影宇宙。</div>
+<div class="stats">
+<div class="stat"><b id="count">0</b><span>已看电影</span></div>
+<div class="stat"><b id="fav">0</b><span>我的收藏</span></div>
+<div class="stat"><b id="avg">—</b><span>平均评分</span></div>
+</div>
+<div class="controls">
+<input id="search" placeholder="🔍 搜索电影…">
+<select id="genre"><option value="">全部类型</option><option>剧情</option><option>动作</option><option>科幻</option><option>悬疑</option><option>爱情</option><option>喜剧</option><option>恐怖</option><option>动画</option></select>
+<select id="sort"><option value="recent">最近添加</option><option value="rating">评分最高</option><option value="year">年份最新</option><option value="title">片名</option></select>
+<button onclick="openAdd()">＋ 添加电影</button>
+</div>
+</div></header>
+
+<main class="wrap"><section id="shelf" class="shelf"></section></main>
+
+<dialog id="dlg"><div class="modal">
+<button class="close" onclick="dlg.close()">×</button><h2 id="dlgTitle">添加电影</h2>
+<div class="row">
+<div><label>电影名</label><input id="fTitle" placeholder="例如：星际穿越"></div>
+<div><label>年份</label><input id="fYear" type="number" placeholder="2014"></div>
+</div>
+<div class="row">
+<div><label>类型</label><select id="fGenre"><option>剧情</option><option>动作</option><option>科幻</option><option>悬疑</option><option>爱情</option><option>喜剧</option><option>恐怖</option><option>动画</option></select></div>
+<div><label>我的评分（0–10）</label><input id="fRating" type="number" min="0" max="10" step=".1" placeholder="9.0"></div>
+</div>
+<label>海报图片地址（可选）</label><input id="fPoster" placeholder="https://…">
+<label>观后感（可选）</label><textarea id="fNote" placeholder="这部电影给我的感觉……"></textarea>
+<div class="actions"><button onclick="dlg.close()">取消</button><button class="primary" onclick="saveMovie()">保存电影</button></div>
+</div></dialog>
+
+<script>
+const KEY="private_movie_shelf_v1";
+let movies=JSON.parse(localStorage.getItem(KEY)||"[]");
+let editing=null;
+const $=id=>document.getElementById(id);
+function persist(){localStorage.setItem(KEY,JSON.stringify(movies));render()}
+function render(){
+ let q=$("search").value.toLowerCase(), g=$("genre").value, s=$("sort").value;
+ let arr=movies.filter(m=>(m.title+m.genre).toLowerCase().includes(q)&&(!g||m.genre===g));
+ arr.sort((a,b)=>s==="rating"?b.rating-a.rating:s==="year"?b.year-a.year:s==="title"?a.title.localeCompare(b.title,"zh"):b.created-a.created);
+ $("count").textContent=movies.length;$("fav").textContent=movies.filter(m=>m.fav).length;
+ let rated=movies.filter(m=>Number.isFinite(m.rating));$("avg").textContent=rated.length?(rated.reduce((x,m)=>x+m.rating,0)/rated.length).toFixed(1):"—";
+ $("shelf").innerHTML=arr.length?arr.map(m=>`<article class="card" onclick="openEdit('${m.id}')">
+ <div class="poster" ${m.poster?`style="background-image:url('${esc(m.poster)}');background-size:cover;background-position:center"`:""}>${m.poster?"":esc(m.title)}</div>
+ <div class="info"><span class="heart">${m.fav?"❤️":"♡"}</span><div class="title">${esc(m.title)}</div>
+ <div class="meta">${m.year||"年份未知"} · ${esc(m.genre)}</div><div class="rating">⭐ ${m.rating||"—"}</div></div></article>`).join(""):`<div class="empty" style="grid-column:1/-1">还没有电影。<br>点击「＋ 添加电影」，建立你的第一层书架。</div>`;
+}
+function esc(x){return String(x||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function openAdd(){editing=null;$("dlgTitle").textContent="添加电影";["fTitle","fYear","fRating","fPoster","fNote"].forEach(x=>$(x).value="");dlg.showModal()}
+function openEdit(id){let m=movies.find(x=>x.id===id);editing=id;$("dlgTitle").textContent="编辑电影";$("fTitle").value=m.title;$("fYear").value=m.year||"";$("fGenre").value=m.genre;$("fRating").value=m.rating||"";$("fPoster").value=m.poster||"";$("fNote").value=m.note||"";dlg.showModal()}
+function saveMovie(){
+ let data={title:$("fTitle").value.trim(),year:Number($("fYear").value)||"",genre:$("fGenre").value,rating:Number($("fRating").value)||0,poster:$("fPoster").value.trim(),note:$("fNote").value.trim()};
+ if(!data.title)return alert("请填写电影名");
+ if(editing){let m=movies.find(x=>x.id===editing);Object.assign(m,data)}else movies.push({id:Date.now().toString(),created:Date.now(),fav:false,...data});
+ dlg.close();persist();
+}
+$("search").oninput=render;$("genre").onchange=render;$("sort").onchange=render;
+render();
+</script>
+</body></html>
